@@ -1,6 +1,6 @@
 # Folders
 .ipynb_checkpoints
 /src/__pycache__/
-
+/data/
 # Files
 *.pyc

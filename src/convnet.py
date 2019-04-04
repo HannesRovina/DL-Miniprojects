@@ -4,11 +4,12 @@ Created on Sat Mar 30 09:51:17 2019
 
 @author: silus
 """
+import torch
 import torch.nn as nn
-from utils import conv2d_out_shape, add_to_summary
+from .utils import conv2d_out_shape, add_to_summary
 # TODO: Look up syntax for leaky ReLU etc.
 ACTIV = ['ReLU','tanh','LReLU']
-
+SAVE_PATH = './trained/numnet.pt'
 class NumNet(nn.Module):
     
     def __init__(self, in_size, n_classes, depth, n_filter, activation, padding,
@@ -105,3 +106,47 @@ class ConvLayer(nn.Module):
     def forward(self, x):
         out = self.block(x)
         return out
+    
+def train_net(model, device, optimizer, criterion, dataloader, 
+               epochs=10, lambda_=1e-3, reg_type=None, save=False):
+    
+    avg_epoch_loss = []
+    for _ in range(epochs):
+        print("Epoch {0}".format(_))
+        loss_accum = 0
+        for i,batch in enumerate(dataloader):
+            # Data in minibatch format N x C x H x H
+            X = batch['input']
+            y = batch['target']
+            
+            prediction = model(X)  # [N, 2, H, W]
+            loss = criterion(prediction, y)
+            
+            if reg_type:
+                assert reg_type in ['l2','l1']
+                if reg_type == 'l2':
+                    for p in model.parameters():
+                        loss += lambda_ * p.pow(2).sum()
+            loss_accum += loss.item()
+            
+            if (i%10 == 0) & (i != 0):        
+                print("Batch {:d}, Cross entropy loss: {:.02f}".format(i,loss_accum/i))
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            if reg_type=='l1':
+                with torch.no_grad():
+                    for p in model.parameters():
+                        p.sub_(p.sign() * p.abs().clamp(max = lambda_))
+                        
+        avg_epoch_loss.append(loss_accum/len(dataloader))
+    
+    if save:
+        try:
+            torch.save(model.state_dict(),SAVE_PATH)
+        except FileNotFoundError:
+            torch.save(model.state_dict(),'./numnet.pt')
+    
+    return avg_epoch_loss, model
