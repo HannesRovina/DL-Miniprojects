@@ -165,6 +165,38 @@ class LinearLayer(nn.Module):
         out = self.block(x.view(-1, self.inp_shape))
         return out
 
+class DropoutLayer(nn.Module):
+    
+    def __init__(self, inp_shape, p=0.5, **kwargs):
+        super(DropoutLayer, self).__init__()
+        
+        self.outp_shape = inp_shape
+        self.block = nn.Dropout2d(p=p)
+        
+        block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
+        add_to_summary(block_summary, nn.Dropout2d.__name__, inp_shape, inp_shape)
+        self.block_summary = block_summary
+    
+    def forward(self, x):
+        out = self.block(x)
+        return out
+    
+class BatchNormLayer(nn.Module):
+    
+    def __init__(self, inp_shape, **kwargs):
+        super(BatchNormLayer, self).__init__()
+        
+        self.outp_shape = inp_shape
+        self.block = nn.BatchNorm2d(inp_shape[0])
+        
+        block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
+        add_to_summary(block_summary, nn.BatchNorm2d.__name__, inp_shape, inp_shape)
+        self.block_summary = block_summary
+    
+    def forward(self, x):
+        out = self.block(x)
+        return out
+    
     
 def train_net(model, device, optimizer, criterion, dataloader, 
                epochs=10, lambda_=1e-3, reg_type=None, save=False):
