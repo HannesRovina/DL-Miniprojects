@@ -110,43 +110,70 @@ class ConvLayer(nn.Module):
 def train_net(model, device, optimizer, criterion, dataloader, 
                epochs=10, lambda_=1e-3, reg_type=None, save=False):
     
-    avg_epoch_loss = []
-    for _ in range(epochs):
-        print("Epoch {0}".format(_))
-        loss_accum = 0
-        for i,batch in enumerate(dataloader):
-            # Data in minibatch format N x C x H x H
-            X = batch['input']
-            y = batch['target']
-            
-            prediction = model(X)  # [N, 2, H, W]
-            loss = criterion(prediction, y)
-            
-            if reg_type:
-                assert reg_type in ['l2','l1']
-                if reg_type == 'l2':
-                    for p in model.parameters():
-                        loss += lambda_ * p.pow(2).sum()
-            loss_accum += loss.item()
-            
-            if (i%10 == 0) & (i != 0):        
-                print("Batch {:d}, Cross entropy loss: {:.02f}".format(i,loss_accum/i))
-            
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
-            if reg_type=='l1':
-                with torch.no_grad():
-                    for p in model.parameters():
-                        p.sub_(p.sign() * p.abs().clamp(max = lambda_))
-                        
-        avg_epoch_loss.append(loss_accum/len(dataloader))
+    model.train()
+    avg_epoch_loss_train = []
+    avg_epoch_loss_test = []
+    avg_epoch_accuracy_train = []
+    avg_epoch_accuracy_test = []
     
+    for e in range(epochs):
+        
+        for phase in ['train','test']:
+            loss_accum = 0
+            correct_train = 0            
+            if phase == 'train':
+                phase_idx = 0
+                model.train()  # Set model to training mode
+            else:
+                phase_idx = 1
+                model.eval()   # Set model to evaluate mode
+        
+            for i,batch in enumerate(dataloader[phase_idx]):
+                # Data in minibatch format N x C x H x H
+                X = batch['input']
+                y = batch['target']
+
+                prediction = model(X)  # [N, 2, H, W]
+                _, predictedY = torch.max(prediction.data, 1)
+                loss = criterion(prediction, y)
+
+                if phase == 'train':
+                    if reg_type:
+                        assert reg_type in ['l2','l1']
+                        if reg_type == 'l2':
+                            for p in model.parameters():
+                                loss += lambda_ * p.pow(2).sum()
+                                
+                loss_accum += loss.item()
+                correct_train += predictedY.eq(y.data).sum().item()
+                
+                #if (i%10 == 0) & (i != 0):        
+                #    print("{} Batch {:d}, Cross entropy loss: {:.02f}, Accuracy: {:.02f}"
+                #          .format(phase,i,loss_accum/((i+1)*len(X)), correct_train/((i+1)*len(X))))
+
+                if phase == 'train':
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+
+                    if reg_type=='l1':
+                        with torch.no_grad():
+                            for p in model.parameters():
+                                p.sub_(p.sign() * p.abs().clamp(max = lambda_))
+
+            if phase == 'train':
+                avg_epoch_loss_train.append(loss_accum/(len(dataloader[phase_idx])*len(X)))
+                avg_epoch_accuracy_train.append(correct_train/(len(dataloader[phase_idx])*len(X)))
+            else:
+                avg_epoch_loss_test.append(loss_accum/(len(dataloader[phase_idx])*len(X)))
+                avg_epoch_accuracy_test.append(correct_train/(len(dataloader[phase_idx])*len(X)))
+                
+        print("Epoch {}: Train Loss: {:.02f}, Train Acc: {:.02f}, Val Loss: {:.02f}, Val Acc: {:.02f}".format(e,
+                          avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
     if save:
         try:
             torch.save(model.state_dict(),SAVE_PATH)
         except FileNotFoundError:
             torch.save(model.state_dict(),'./numnet.pt')
     
-    return avg_epoch_loss, model
+    return avg_epoch_loss_train, avg_epoch_accuracy_train, avg_epoch_loss_test, avg_epoch_accuracy_test, model
