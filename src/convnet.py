@@ -8,12 +8,11 @@ import torch
 import torch.nn as nn
 from .utils import conv2d_out_shape, add_to_summary
 # TODO: Look up syntax for leaky ReLU etc.
-ACTIV = ['ReLU','tanh','LReLU']
+ACTIV = ['ReLU()','tanh()','LReLU','LogSoftmax(dim=1)']
 SAVE_PATH = './trained/numnet.pt'
 class NumNet(nn.Module):
     
-    def __init__(self, in_size, n_classes, depth, n_filter, activation, padding,
-                 kernel_size=3, stride=1, pooling=2):
+    def __init__(self, in_size, specs):
         
         """
         Convolutional neural network class
@@ -26,21 +25,26 @@ class NumNet(nn.Module):
         
         assert len(in_size) == 3
         
-        self.padding = padding
-        self.depth = depth
         self.blocks = nn.ModuleList()
         self.module_summary = []
         
-        # Add as many convolution layers as specified by depth
-        size = in_size
-        for i in range(depth):
-            self.blocks.append(ConvLayer(size, n_filter*2**i, activation, 
-                                         padding, kernel_size=kernel_size, stride=stride, pooling=2))
-            size = self.blocks[-1].outp_shape
-            self.module_summary.append(self.blocks[-1].block_summary)
+        assert isinstance(specs, list)
+        
+        inp_shape = in_size
+        
+        for layer_specs in specs:
+            layer = eval(layer_specs['Type'])
+            add_block = layer(inp_shape,**layer_specs)
+            inp_shape = add_block.outp_shape
+            self.module_summary.append(add_block.block_summary)
+            self.blocks.append(add_block)
         
         
-        # TODO: add fully-connected linear and output
+    def forward(self, x):
+        for layer in self.blocks:
+            x = layer(x)
+        return x
+            
         
     def summary(self):
         """
@@ -73,32 +77,29 @@ class ConvLayer(nn.Module):
                         linear layer needs to have
         block:          
     """
-    def __init__(self, in_size, out_channels, activation, padding, kernel_size=3, stride=1, pooling=2):
+    def __init__(self, inp_shape, out_channels, activation='ReLU()', padding=0, kernel_size=3, stride=1, pooling=2, **kwargs):
         super(ConvLayer, self).__init__()
-        assert activation in ACTIV
+        
+        try:
+            assert activation in ACTIV
+        except AssertionError:
+            print(activation + " is not a valid activation function")
+            activation='ReLU()'
         
         block_content = []
         # Dict that saves a Keras-like summary of the block
         block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
         
         # In_size needs to be list, tuple or torch.Size to be indexable and return int
-        block_content.append(nn.Conv2d(in_size[0], out_channels, kernel_size=kernel_size,
+        block_content.append(nn.Conv2d(inp_shape[0], out_channels, kernel_size=kernel_size,
                                padding=int(padding), stride=stride))
         
-        block_content.append(eval('nn.'+activation+'()'))
+        block_content.append(eval('nn.'+activation))
         
-        outp_shape = conv2d_out_shape(in_size, out_channels, kernel_size=kernel_size, 
+        outp_shape = conv2d_out_shape(inp_shape, out_channels, kernel_size=kernel_size, 
                                     padding=padding, stride=stride, dilation=1)
-        add_to_summary(block_summary, nn.Conv2d.__name__, in_size, outp_shape)
+        add_to_summary(block_summary, nn.Conv2d.__name__, inp_shape, outp_shape)
         
-        if pooling is not None:
-            block_content.append(nn.MaxPool2d(kernel_size=int(pooling)))
-            # Update output shape when using pooling
-            pool_inp_shape = outp_shape
-            outp_shape = conv2d_out_shape(outp_shape, out_channels, kernel_size=int(pooling),
-                                          padding=0, stride=1, dilation=1)
-            add_to_summary(block_summary, nn.MaxPool2d.__name__, pool_inp_shape, outp_shape)
-            
         self.outp_shape = outp_shape
         self.block_summary = block_summary
         self.block = nn.Sequential(*block_content)
@@ -106,6 +107,64 @@ class ConvLayer(nn.Module):
     def forward(self, x):
         out = self.block(x)
         return out
+    
+class MaxPoolLayer(nn.Module):
+    def __init__(self, inp_shape, pooling=2, padding=0, stride=2, dilation=1, **kwargs):
+        super(MaxPoolLayer,self).__init__()
+        
+         # Dict that saves a Keras-like summary of the block
+        block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
+        
+        # Calculate output shape
+        outp_shape = conv2d_out_shape(inp_shape, inp_shape[0], kernel_size=int(pooling),
+                                          padding=padding, stride=stride, dilation=dilation)
+        
+        add_to_summary(block_summary, nn.MaxPool2d.__name__, inp_shape, outp_shape)
+        # Configure layer
+        self.block = nn.MaxPool2d(int(pooling), padding=padding, stride=stride, dilation=dilation)
+        self.outp_shape = outp_shape
+        self.block_summary = block_summary
+    def forward(self, x):
+        out = self.block(x)
+        return out
+        
+    
+class LinearLayer(nn.Module):
+    
+    def __init__(self, inp_shape, out_features, activation='ReLU()', **kwargs):
+        super(LinearLayer, self).__init__()
+        
+        try:
+            assert activation in ACTIV
+        except AssertionError:
+            print(activation + " is not a valid activation function")
+            activation='ReLU()'
+            
+        if isinstance(inp_shape, int):
+            in_features = inp_shape
+        else:
+            assert isinstance(inp_shape, list)
+            in_features = 1
+            for e in inp_shape:
+                in_features *= e
+        
+        self.inp_shape = in_features
+        self.outp_shape = out_features
+        
+        block_content = []
+        block_content.append(nn.Linear(in_features, out_features))
+        block_content.append(eval('nn.'+activation))
+        
+        self.block = nn.Sequential(*block_content)
+        block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
+        add_to_summary(block_summary, nn.Linear.__name__, in_features, out_features)
+        self.block_summary = block_summary
+    
+    
+    def forward(self, x):
+        out = self.block(x.view(-1, self.inp_shape))
+        return out
+
     
 def train_net(model, device, optimizer, criterion, dataloader, 
                epochs=10, lambda_=1e-3, reg_type=None, save=False):
