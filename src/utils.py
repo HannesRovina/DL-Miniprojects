@@ -42,3 +42,8 @@ def add_to_summary(summary, layer, in_shape, out_shape):
     summary['Layer'].append(layer)
     summary['Input shape'].append(str(in_shape))
     summary['Output shape'].append(str(out_shape))
+    
+def count_module_train_params(module):
+    
+    assert hasattr(module, 'parameters')
+    return sum(p.numel() for p in module.parameters() if p.requires_grad)

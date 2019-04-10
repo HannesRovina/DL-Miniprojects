@@ -6,7 +6,7 @@ Created on Sat Mar 30 09:51:17 2019
 """
 import torch
 import torch.nn as nn
-from .utils import conv2d_out_shape, add_to_summary
+from .utils import conv2d_out_shape, add_to_summary, count_module_train_params
 # TODO: Look up syntax for leaky ReLU etc.
 ACTIV = ['ReLU()','tanh()','LReLU','LogSoftmax(dim=1)']
 SAVE_PATH = './trained/numnet.pt'
@@ -50,16 +50,30 @@ class NumNet(nn.Module):
         """
         Print a Keras-like summary of the model
         """
+        w = 20
+        total_params = 0
         # Very dirty stuff
-        cell_width = 30
-        print(" "*10 + "Layers" + " "*(cell_width-len('Layers')) + "Input shape" + " "*(cell_width-len('Input shape')) + "Output shape")
+        
+        # Creating the header line
+        header = ['Number', 'Layer','Output shape','Input shape', 'Trainable params']
+        
+        head_line = ""
+        for h in header:
+            head_line += h + " "*(w-len(h))
+        # Print the header line
+        print(head_line)
         for i,d in enumerate(self.module_summary):
-            li = d['Layer']
-            out_si = d['Output shape']
-            in_si = d['Input shape']
-            
-            for l, out_s, in_s in zip(li, out_si, in_si):
-                print(('{0}'+ " "*8 +'{1}' + " "*(cell_width-len(l)) + '{2}' + " "*(cell_width-len(in_s)) + '{3}').format(i,l, in_s, out_s))
+            li = d[header[1]]
+            out_si = d[header[2]]
+            in_si = d[header[3]]
+            t_params = d[header[4]]
+
+            for l, out_s, in_s,p in zip(li, out_si, in_si, t_params):
+                print(('{0}'+" "*(w-len(str(i)))+'{1}'+" "*(w-len(l))+'{2}'+" "*(w-len(in_s))+'{3}'+" "*(w-len(out_s))+ '{4}').format(i,l, in_s, out_s, p))
+                total_params += p
+                
+        print("-"*len(header)*w)
+        print("Total number of trainable parameters: {0}".format(total_params))
 class ConvLayer(nn.Module):
     """
     Convolution block consisting of a convolutional layer and and an optional max pooling layer
@@ -98,12 +112,18 @@ class ConvLayer(nn.Module):
         
         outp_shape = conv2d_out_shape(inp_shape, out_channels, kernel_size=kernel_size, 
                                     padding=padding, stride=stride, dilation=1)
-        add_to_summary(block_summary, nn.Conv2d.__name__, inp_shape, outp_shape)
         
         self.outp_shape = outp_shape
-        self.block_summary = block_summary
         self.block = nn.Sequential(*block_content)
-
+        
+        # Fill in block summary dictionary
+        add_to_summary(block_summary, nn.Conv2d.__name__, inp_shape, outp_shape)
+        block_summary['Trainable params'] = [self.trainable_params_()]
+        self.block_summary = block_summary
+        
+    def trainable_params_(self):
+        return count_module_train_params(self)
+    
     def forward(self, x):
         out = self.block(x)
         return out
@@ -119,11 +139,17 @@ class MaxPoolLayer(nn.Module):
         outp_shape = conv2d_out_shape(inp_shape, inp_shape[0], kernel_size=int(pooling),
                                           padding=padding, stride=stride, dilation=dilation)
         
-        add_to_summary(block_summary, nn.MaxPool2d.__name__, inp_shape, outp_shape)
         # Configure layer
         self.block = nn.MaxPool2d(int(pooling), padding=padding, stride=stride, dilation=dilation)
         self.outp_shape = outp_shape
-        self.block_summary = block_summary
+        
+        add_to_summary(block_summary, nn.MaxPool2d.__name__, inp_shape, outp_shape)
+        block_summary['Trainable params'] = [self.trainable_params_()]
+        self.block_summary = block_summary 
+        
+    def trainable_params_(self):
+        return count_module_train_params(self)
+    
     def forward(self, x):
         out = self.block(x)
         return out
@@ -154,12 +180,15 @@ class LinearLayer(nn.Module):
         block_content = []
         block_content.append(nn.Linear(in_features, out_features))
         block_content.append(eval('nn.'+activation))
-        
         self.block = nn.Sequential(*block_content)
+        
         block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
         add_to_summary(block_summary, nn.Linear.__name__, in_features, out_features)
+        block_summary['Trainable params'] = [self.trainable_params_()]
         self.block_summary = block_summary
     
+    def trainable_params_(self):
+        return count_module_train_params(self)
     
     def forward(self, x):
         out = self.block(x.view(-1, self.inp_shape))
@@ -175,7 +204,11 @@ class DropoutLayer(nn.Module):
         
         block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
         add_to_summary(block_summary, nn.Dropout2d.__name__, inp_shape, inp_shape)
+        block_summary['Trainable params'] = [self.trainable_params_()]
         self.block_summary = block_summary
+    
+    def trainable_params_(self):
+        return count_module_train_params(self)
     
     def forward(self, x):
         out = self.block(x)
@@ -191,7 +224,11 @@ class BatchNormLayer(nn.Module):
         
         block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
         add_to_summary(block_summary, nn.BatchNorm2d.__name__, inp_shape, inp_shape)
+        block_summary['Trainable params'] = [self.trainable_params_()]        
         self.block_summary = block_summary
+    
+    def trainable_params_(self):
+        return count_module_train_params(self)
     
     def forward(self, x):
         out = self.block(x)
