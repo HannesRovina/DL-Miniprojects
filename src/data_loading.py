@@ -22,12 +22,15 @@ class DlDataset(Dataset):
             self.upsample = upsample
     
         self.dataset = generate_pair_sets(N)
-        
+        self.shape = self.dataset[0].shape
         self.stats_tr = self.dataset[0].mean(), self.dataset[0].std()
         self.stats_te = self.dataset[3].mean(), self.dataset[3].std()
         
     def __len__(self):
         return self.N
+    
+    def __shape__(self):
+        return self.shape
     
     def __getitem__(self, idx):
         if self.return_set == 'train':

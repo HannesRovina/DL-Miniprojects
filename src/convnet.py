@@ -6,6 +6,7 @@ Created on Sat Mar 30 09:51:17 2019
 """
 import torch
 import torch.nn as nn
+import time
 from .utils import conv2d_out_shape, add_to_summary, count_module_train_params
 # TODO: Look up syntax for leaky ReLU etc.
 ACTIV = ['ReLU()','tanh()','LReLU','LogSoftmax(dim=1)']
@@ -55,7 +56,7 @@ class NumNet(nn.Module):
         # Very dirty stuff
         
         # Creating the header line
-        header = ['Number', 'Layer','Output shape','Input shape', 'Trainable params']
+        header = ['Number', 'Layer','Input shape','Output shape', 'Trainable params']
         
         head_line = ""
         for h in header:
@@ -64,8 +65,8 @@ class NumNet(nn.Module):
         print(head_line)
         for i,d in enumerate(self.module_summary):
             li = d[header[1]]
-            out_si = d[header[2]]
-            in_si = d[header[3]]
+            out_si = d[header[3]]
+            in_si = d[header[2]]
             t_params = d[header[4]]
 
             for l, out_s, in_s,p in zip(li, out_si, in_si, t_params):
@@ -74,6 +75,7 @@ class NumNet(nn.Module):
                 
         print("-"*len(header)*w)
         print("Total number of trainable parameters: {0}".format(total_params))
+        print("-"*len(header)*w)
 class ConvLayer(nn.Module):
     """
     Convolution block consisting of a convolutional layer and and an optional max pooling layer
@@ -245,7 +247,7 @@ def train_net(model, device, optimizer, criterion, dataloader,
     avg_epoch_accuracy_test = []
     
     for e in range(epochs):
-        
+        start = time.time()
         for phase in ['train','test']:
             loss_accum = 0
             correct_train = 0            
@@ -295,9 +297,9 @@ def train_net(model, device, optimizer, criterion, dataloader,
             else:
                 avg_epoch_loss_test.append(loss_accum/(len(dataloader[phase_idx])*len(X)))
                 avg_epoch_accuracy_test.append(correct_train/(len(dataloader[phase_idx])*len(X)))
-                
-        print("Epoch {}: Train Loss: {:.02f}, Train Acc: {:.02f}, Val Loss: {:.02f}, Val Acc: {:.02f}".format(e,
-                          avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
+        
+        end = time.time()-start
+        print("Epoch {}: Duration: {:.02f}s, Train Loss: {:.02f}, Train Acc: {:.02f}, Val Loss: {:.02f}, Val Acc: {:.02f}".format(e,end, avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
     if save:
         try:
             torch.save(model.state_dict(),SAVE_PATH)
