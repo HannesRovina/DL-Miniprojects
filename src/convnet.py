@@ -13,7 +13,7 @@ ACTIV = ['ReLU()','tanh()','LReLU','LogSoftmax(dim=1)']
 SAVE_PATH = './trained/numnet.pt'
 class NumNet(nn.Module):
     
-    def __init__(self, in_size, specs):
+    def __init__(self, in_size, specs, name=None):
         
         """
         Convolutional neural network class
@@ -40,6 +40,11 @@ class NumNet(nn.Module):
             self.module_summary.append(add_block.block_summary)
             self.blocks.append(add_block)
         
+        self.set_nbr_trainable_params_()
+        
+        if name is not None:
+            assert isinstance(name, str)
+            self.name_ = name
         
     def forward(self, x):
         for layer in self.blocks:
@@ -54,9 +59,10 @@ class NumNet(nn.Module):
         w = 20
         total_params = 0
         # Very dirty stuff
-        
+        print(" ")
+        print("Model '{}'".format(self.name()))
         # Creating the header line
-        header = ['Number', 'Layer','Input shape','Output shape', 'Trainable params']
+        header = ['Number', 'Layer','Output shape','Input shape', 'Trainable params']
         
         head_line = ""
         for h in header:
@@ -65,8 +71,8 @@ class NumNet(nn.Module):
         print(head_line)
         for i,d in enumerate(self.module_summary):
             li = d[header[1]]
-            out_si = d[header[3]]
-            in_si = d[header[2]]
+            out_si = d[header[2]]
+            in_si = d[header[3]]
             t_params = d[header[4]]
 
             for l, out_s, in_s,p in zip(li, out_si, in_si, t_params):
@@ -76,6 +82,25 @@ class NumNet(nn.Module):
         print("-"*len(header)*w)
         print("Total number of trainable parameters: {0}".format(total_params))
         print("-"*len(header)*w)
+        
+    def name(self):
+        if hasattr(self, 'name_'):
+            return self.name_
+        else:
+            return 'Unnamed'
+                
+    def set_nbr_trainable_params_(self):
+        """
+            Sets the attrubute num_parameters (total number of trainable parameters
+            of the model)
+        """
+        total_params = 0
+        for d in self.module_summary:
+            params = d['Trainable params']
+            for p in params:
+                total_params += p
+        self.num_parameters = total_params
+
 class ConvLayer(nn.Module):
     """
     Convolution block consisting of a convolutional layer and and an optional max pooling layer
@@ -305,6 +330,38 @@ def train_net(model, device, optimizer, criterion, dataloader,
             torch.save(model.state_dict(),SAVE_PATH)
         except FileNotFoundError:
             torch.save(model.state_dict(),'./numnet.pt')
-    
-    return avg_epoch_loss_train, avg_epoch_accuracy_train, avg_epoch_loss_test, avg_epoch_accuracy_test, model
 
+    return {'train_loss':avg_epoch_loss_train, 
+        	'train_accuracy':avg_epoch_accuracy_train, 
+        	'test_loss':avg_epoch_loss_test, 
+        	'test_accuracy':avg_epoch_accuracy_test}, model
+
+class ModelPerformanceSummary:
+    """
+        Class that stores a trained model along with performances on training
+        and validation set
+    """
+    def __init__(self, model, perf):
+        assert isinstance(model, NumNet)
+        self.model = model
+        
+        if perf is not None:
+            self.performance = perf
+    
+    def add_performance(self, perf):
+        assert isinstance(perf, dict)
+        
+        if not hasattr(self, 'performance'):
+            self.performance = perf
+        else:
+            self.performance.update(perf)
+            
+    def get_performance(self, perf_name):
+        assert isinstance(perf_name, str)
+        try:
+            data = self.performance[perf_name]
+        except KeyError:
+            print(perf_name + "not evaluated for model " + self.model.name())
+            return None
+        
+        return data
