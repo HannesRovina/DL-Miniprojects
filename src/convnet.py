@@ -299,7 +299,7 @@ def train_net(model, device, optimizer, criterion, dataloader,
                 avg_epoch_accuracy_test.append(correct_train/(len(dataloader[phase_idx])*len(X)))
         
         end = time.time()-start
-        print("Epoch {}: Duration: {:.02f}s, Train Loss: {:.02f}, Train Acc: {:.02f}, Val Loss: {:.02f}, Val Acc: {:.02f}".format(e,end, avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
+        print("Epoch {}: Duration: {:.02f}s, Train Loss: {:.02e}, Train Acc: {:.02f}, Val Loss: {:.02f}, Val Acc: {:.02f}".format(e,end, avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
     if save:
         try:
             torch.save(model.state_dict(),SAVE_PATH)
