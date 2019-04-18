@@ -62,7 +62,7 @@ class NumNet(nn.Module):
         print(" ")
         print("Model '{}'".format(self.name()))
         # Creating the header line
-        header = ['Number', 'Layer','Output shape','Input shape', 'Trainable params']
+        header = ['Number', 'Layer','Input shape','Output shape', 'Trainable params']
         
         head_line = ""
         for h in header:
@@ -71,8 +71,8 @@ class NumNet(nn.Module):
         print(head_line)
         for i,d in enumerate(self.module_summary):
             li = d[header[1]]
-            out_si = d[header[2]]
-            in_si = d[header[3]]
+            out_si = d[header[3]]
+            in_si = d[header[2]]
             t_params = d[header[4]]
 
             for l, out_s, in_s,p in zip(li, out_si, in_si, t_params):
