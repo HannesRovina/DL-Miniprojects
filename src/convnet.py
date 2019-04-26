@@ -324,7 +324,7 @@ def train_net(model, device, optimizer, criterion, dataloader,
                 avg_epoch_accuracy_test.append(correct_train/(len(dataloader[phase_idx])*len(X)))
         
         end = time.time()-start
-        print("Epoch {}: Duration: {:.02f}s, Train Loss: {:.02e}, Train Acc: {:.02f}, Val Loss: {:.02f}, Val Acc: {:.02f}".format(e,end, avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
+        print("Epoch {}: Duration: {:.02f}s, Train Loss: {:.02e}, Train Acc: {:.02f}, Val Loss: {:.02e}, Val Acc: {:.02f}".format(e,end, avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
     if save:
         try:
             torch.save(model.state_dict(),SAVE_PATH)
@@ -335,6 +335,32 @@ def train_net(model, device, optimizer, criterion, dataloader,
         	'train_accuracy':avg_epoch_accuracy_train, 
         	'test_loss':avg_epoch_loss_test, 
         	'test_accuracy':avg_epoch_accuracy_test}, model
+
+def evaluate_net_classes(model, dataset):
+    
+    model.eval()
+    sides = ['left','right']
+    resulting_classes = []
+    target = dataset[:]['classes']
+    for s, side in enumerate(sides):
+        dataset.selectSplittedDataset(side)
+        
+        X = dataset[:]['input']
+        
+        prediction = model(X)
+        _, predictedY = torch.max(prediction.data, 1)
+        resulting_classes.append(predictedY)
+    
+              
+    resulting_target = resulting_classes[0] <= resulting_classes[1]
+    
+    target = target > 0.5
+    
+    correct_target = (resulting_target == target)
+
+    
+    return correct_target.sum().item()/len(target)
+    
 
 class ModelPerformanceSummary:
     """
