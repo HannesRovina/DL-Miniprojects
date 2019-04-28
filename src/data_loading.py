@@ -5,7 +5,7 @@ Created on Wed Apr  3 18:38:49 2019
 @author: silus
 """
 
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torch.nn import functional as F
 from .dlc_practical_prologue import generate_pair_sets
 
@@ -30,23 +30,9 @@ class DlDataset(Dataset):
         if upsample is not None:
             assert isinstance(upsample, tuple)
             self.upsample = upsample
-    
-        data = generate_pair_sets(N)
-        if self.split == False:
-            self.dataset = data
-        else:
-            (tr_inp, tr_target, tr_classes, te_inp, te_target, te_classes) = data
-            self.left_images = [tr_inp.narrow(1,0,1),tr_classes.narrow(1,0,1).view(-1),tr_target,
-                                te_inp.narrow(1,0,1),te_classes.narrow(1,0,1).view(-1),te_target]
-            self.right_images = [tr_inp.narrow(1,1,1),tr_classes.narrow(1,1,1).view(-1),tr_target,
-                                te_inp.narrow(1,1,1),te_classes.narrow(1,1,1).view(-1),te_target]
-            
-            self.dataset = self.left_images
-            
         
-        self.shape = self.dataset[0].shape
-        self.stats_tr = self.dataset[0].mean(), self.dataset[0].std()
-        self.stats_te = self.dataset[3].mean(), self.dataset[3].std()
+        self.load_random_data_()
+        self.update_data_prop_()
         
     def __len__(self):
         return self.N
@@ -63,7 +49,7 @@ class DlDataset(Dataset):
         elif self.return_set == 'test':
             #print("Returning test data...")
             inp, target, classes = self.dataset[3:]
-            stats = self.stats_tr
+            stats = self.stats_te
         
         if self.normalize:
             inp.sub_(stats[0].div_(stats[1]))
@@ -73,16 +59,48 @@ class DlDataset(Dataset):
         
         return {'input':inp[idx], 'target':target[idx], 'classes':classes[idx]}
     
+    def load_random_data_(self):
+        
+        data = generate_pair_sets(self.N)
+        if not self.split:
+            self.dataset = data
+        else:
+            (tr_inp, tr_target, tr_classes, te_inp, te_target, te_classes) = data
+            self.left_images = [tr_inp.narrow(1,0,1),tr_classes.narrow(1,0,1).view(-1),tr_target,
+                                te_inp.narrow(1,0,1),te_classes.narrow(1,0,1).view(-1),te_target]
+            self.right_images = [tr_inp.narrow(1,1,1),tr_classes.narrow(1,1,1).view(-1),tr_target,
+                                te_inp.narrow(1,1,1),te_classes.narrow(1,1,1).view(-1),te_target]
+            
+            self.dataset = self.left_images
+    
+    def update_data_prop_(self):
+        self.shape = self.dataset[0].shape
+        self.stats_tr = self.dataset[0].mean(), self.dataset[0].std()
+        self.stats_te = self.dataset[3].mean(), self.dataset[3].std()
+        
+    def shuffle(self):
+        """
+            Reload a N random samples
+        """
+        
+        self.load_random_data_()
+        self.update_data_prop_()
+    
     def selectSplittedDataset(self, side):
         if side == 'left':
             self.dataset = self.left_images
         elif side == 'right':
             self.dataset = self.right_images
         
+        self.update_data_prop_()
+        
     def train(self):
         self.return_set = 'train'
     def test(self):
         self.return_set = 'test'
+    
+    def return_dataloader(self, batch_size=4, shuffle=True, num_workers=4):
+        return DataLoader(self, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
         
     def infere(self, model, idx):
         """
@@ -119,3 +137,4 @@ class DlDataset(Dataset):
             plt.imshow(x[0][1])
 
         return predicted_target, target, classes
+    

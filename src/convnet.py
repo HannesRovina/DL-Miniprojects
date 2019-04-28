@@ -184,14 +184,8 @@ class MaxPoolLayer(nn.Module):
     
 class LinearLayer(nn.Module):
     
-    def __init__(self, inp_shape, out_features, activation='ReLU()', **kwargs):
+    def __init__(self, inp_shape, out_features, activation=None, **kwargs):
         super(LinearLayer, self).__init__()
-        
-        try:
-            assert activation in ACTIV
-        except AssertionError:
-            print(activation + " is not a valid activation function")
-            activation='ReLU()'
             
         if isinstance(inp_shape, int):
             in_features = inp_shape
@@ -206,8 +200,18 @@ class LinearLayer(nn.Module):
         
         block_content = []
         block_content.append(nn.Linear(in_features, out_features))
-        block_content.append(eval('nn.'+activation))
-        self.block = nn.Sequential(*block_content)
+        
+        # Add activation if it was specified
+        if activation is not None:
+            try:
+                assert activation in ACTIV
+            except AssertionError:
+                print(activation + " is not a valid activation function")
+                activation='ReLU()'
+            block_content.append(eval('nn.'+activation))   
+            self.block = nn.Sequential(*block_content)
+        else:
+            self.block = block_content.pop()
         
         block_summary = {'Layer':[],'Input shape':[],'Output shape':[]}
         add_to_summary(block_summary, nn.Linear.__name__, in_features, out_features)
@@ -261,11 +265,24 @@ class BatchNormLayer(nn.Module):
         out = self.block(x)
         return out
     
+def init_weights(module):
+    """
+        Initialize the weights of module.
+        Xavier initialization for Conv and Linear layers
+    """
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
+        nn.init.xavier_normal_(module.weight.data)
+    elif isinstance(module, nn.BatchNorm2d):
+        module.reset_parameters()
     
 def train_net(model, device, optimizer, criterion, dataloader, 
                epochs=10, lambda_=1e-3, reg_type=None, save=False):
     
+    # Initialize model weights
+    model.apply(init_weights)  
     model.train()
+    model.to(device)
+    
     avg_epoch_loss_train = []
     avg_epoch_loss_test = []
     avg_epoch_accuracy_train = []
@@ -335,6 +352,67 @@ def train_net(model, device, optimizer, criterion, dataloader,
         	'train_accuracy':avg_epoch_accuracy_train, 
         	'test_loss':avg_epoch_loss_test, 
         	'test_accuracy':avg_epoch_accuracy_test}, model
+            
+def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch_spec,
+               epochs=10, lambda_=1e-3, reg_type=None, save=False):
+    """
+        Assess model over 'n_iter' training trials
+        
+        n_iter          int, how many training runs should be done
+        model           model that is trained
+        optim_spec      dict specifying the optimizer. Should contain a key 'type' 
+                        with a value string corresponding to a optimizer, eg 'SGD'
+                        The other keys specify optimizer-specific parameters,
+                        eg. 'lr', 'momentum'
+        criterion       Loss function
+        dataset         DlDataset instance
+    """
+    
+    trial_perfs = []
+    
+    # Define optimizer
+    try:
+        optim_type = getattr(torch.optim,optim_spec.pop('type'))
+        optim = optim_type(model.parameters(), **optim_spec)
+    except KeyError or AttributeError:
+        optim = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+        print("Invalid optimizer specifications. Defaulting to SGD with lr=0.01, eta=0.5")
+    
+    for i in range(n_iter):
+        
+        # Randomize datasets for each trial and make dataloader
+        dataloader = []
+        dataset.shuffle()
+        for mode in ['train','test']:
+            if mode == 'train':
+                dataset.train()
+            elif mode == 'test':
+                dataset.test()
+            dataloader.append(dataset.return_dataloader(**batch_spec))    
+        
+        # Train
+        performance, _ = train_net(model, device, optim, criterion, dataloader,
+                                    epochs=epochs, lambda_=1e-3, reg_type=None, 
+                                    save=False)
+        trial_perfs.append(performance)
+    
+    perf_as_tensor = {}
+    for i,trial in enumerate(trial_perfs):
+        for key, val in trial.items():
+            assert isinstance(val, list)
+            if i == 0:
+                perf_as_tensor[key] = [torch.Tensor(val)]
+            else:
+                perf_as_tensor[key].append(torch.Tensor(val))
+                
+    overall_perf = {}
+    for key, val in perf_as_tensor.items():
+        total = torch.stack(val, dim=0)
+        overall_perf['avg_'+key] = total.mean(dim=0)
+        overall_perf['std_'+key] =  total.std(dim=0)
+    
+    return ModelPerformanceSummary(model, overall_perf)
+        
 
 def evaluate_net_classes(model, dataset):
     
@@ -369,7 +447,7 @@ class ModelPerformanceSummary:
     """
     def __init__(self, model, perf):
         assert isinstance(model, NumNet)
-        self.model = model
+        self.model = model.name()
         
         if perf is not None:
             self.performance = perf
@@ -387,7 +465,7 @@ class ModelPerformanceSummary:
         try:
             data = self.performance[perf_name]
         except KeyError:
-            print(perf_name + "not evaluated for model " + self.model.name())
+            print(perf_name + "not evaluated for model " + self.model)
             return None
         
         return data
