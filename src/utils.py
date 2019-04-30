@@ -5,6 +5,7 @@ Created on Sat Mar 30 13:19:42 2019
 @author: silus
 """
 import torch
+import matplotlib.pyplot as plt
 
 def conv2d_out_shape(shape, out_channels, kernel_size=3, padding=0, stride=1, dilation=1):
     """
@@ -47,3 +48,60 @@ def count_module_train_params(module):
     
     assert hasattr(module, 'parameters')
     return sum(p.numel() for p in module.parameters() if p.requires_grad)
+
+def plot_performance(perfs, plot_perfs, figsize=(18,7), suptitle=None):
+    """
+	Plot the performance of a run
+	Inputs
+	perfs		Iterable of ModelPerformanceSummary objects
+	plot_perfs 	Performances (names as strings that should be plotted as a list of 			
+                lists. Elements in the same axis are grouped up in the same subelement.
+			eg. [['train_loss','test_loss'],[train_accuracy','test_accuracy']]
+	Returns
+	axes		List with all the created axes
+    """
+    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
+    styles = ['-','--','-.',':']
+
+    assert isinstance(figsize, tuple)
+    fig = plt.figure('History Plot', figsize=figsize)
+    if suptitle is not None:
+        fig.suptitle(suptitle, fontsize=16)
+    n_plots = len(plot_perfs)
+    axes = []
+    for i in range(1,n_plots+1):
+        axes.append(fig.add_subplot(1,n_plots,i))
+    extremas = {}
+    
+    for i, perf in enumerate(perfs):
+        model_name = perf.model
+        model_extremas = {}
+        for ax, lines in zip(axes, plot_perfs):
+            for line, style in zip(lines, styles):
+                if isinstance(line, tuple):
+                    y = perf.get_performance(line[0])
+                    if isinstance(y, torch.Tensor):
+                        y = y.numpy()
+                    t = range(0, len(y))
+                    # Errorbars
+                    yerr = perf.get_performance(line[1])
+                    if isinstance(yerr, torch.Tensor):
+                        yerr = yerr.numpy()
+                    ax.errorbar(t, y, yerr=yerr, capsize=4, linestyle=style, color=colors[i%8], label=model_name + '  ' + line[0])
+                    model_extremas[line[0]] = (max(y), min(y))
+                    print('Model: {:<20}  {:<20} min: {:>5.3f} max: {:>5.3f}'.format(model_name, line[0], min(y), max(y)))
+    
+                else:
+                    y  = perf.get_performance(line)
+                    if isinstance(y, torch.Tensor):
+                        y = y.numpy()
+                    t = range(0, len(y))
+                    ax.plot(t, y, linestyle=style, color=colors[i%8], label=model_name + '  ' + line)
+                    model_extremas[line] = (max(y), min(y))
+                    print('Model: {:<20}  {:<20} min: {:>5.3f} max: {:>5.3f}'.format(model_name, line, min(y), max(y)))
+            ax.set_xlabel('Epochs')
+            ax.grid(True)
+            ax.legend()
+        extremas[model_name] = model_extremas
+    return axes, extremas
+

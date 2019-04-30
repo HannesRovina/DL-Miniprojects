@@ -396,6 +396,9 @@ def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch
                                     save=False)
         trial_perfs.append(performance)
     
+    # Cast lists containing accuracy, loss per epoch to tensors for 
+    # mean and std calculation
+    
     perf_as_tensor = {}
     for i,trial in enumerate(trial_perfs):
         for key, val in trial.items():
@@ -406,11 +409,13 @@ def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch
                 perf_as_tensor[key].append(torch.Tensor(val))
                 
     overall_perf = {}
+    print("Out of {0} trials:".format(n_iter))
     for key, val in perf_as_tensor.items():
         total = torch.stack(val, dim=0)
         overall_perf['avg_'+key] = total.mean(dim=0)
         overall_perf['std_'+key] =  total.std(dim=0)
-    
+        best,_ = total.max(dim=1)
+        print(key + ": Max {0:.2f} Min {1:.2f} | Average {2:.2f}, std {3:.2f}".format(best.max(), best.min(), best.mean(), best.std()))
     return ModelPerformanceSummary(model, overall_perf)
         
 
