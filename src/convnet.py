@@ -341,13 +341,16 @@ def train_net(model, device, optimizer, criterion, dataloader,
                 if dataset is not None:
                     if dataset.split:
                         avg_epoch_target_accuracy_train.append(evaluate_net_classes(model,dataset))
+                else:
+                    avg_epoch_target_accuracy_train.append(0)
             else:
                 avg_epoch_loss_test.append(loss_accum/(len(dataloader[phase_idx])*len(X)))
                 avg_epoch_accuracy_test.append(correct_train/(len(dataloader[phase_idx])*len(X)))
                 if dataset is not None:
                     if dataset.split:
                         avg_epoch_target_accuracy_test.append(evaluate_net_classes(model,dataset))
-            
+                else:
+                    avg_epoch_target_accuracy_test.append(0)
         
         end = time.time()-start
         print("Epoch {}: Duration: {:.02f}s, Train Loss: {:.02e}, Train Acc: {:.02f}, Val Loss: {:.02e}, Val Acc: {:.02f}".format(e,end, avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
@@ -417,6 +420,9 @@ def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch
         trial_perfs.append(performance)
             
     
+    # Cast lists containing accuracy, loss per epoch to tensors for 
+    # mean and std calculation
+    
     perf_as_tensor = {}
     for i,trial in enumerate(trial_perfs):
         for key, val in trial.items():
@@ -427,11 +433,19 @@ def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch
                 perf_as_tensor[key].append(torch.Tensor(val))
             
     overall_perf = {}
+    print("-"*100)
+    print("Out of {0} trials:".format(n_iter))
+    print("-"*100)
     for key, val in perf_as_tensor.items():
         total = torch.stack(val, dim=0)
         overall_perf['avg_'+key] = total.mean(dim=0)
         overall_perf['std_'+key] =  total.std(dim=0)
-    
+
+        best,_ = total.max(dim=1)
+        
+        print(key + ": Max {0:.2f} Min {1:.2f} | Average {2:.2f}, std {3:.2f}".format(best.max(), best.min(), best.mean(),
+                                                                                      best.std()))
+    print("-"*100)
     
     return ModelPerformanceSummary(model, overall_perf)
         
@@ -458,9 +472,8 @@ def evaluate_net_classes(model, dataset):
     target = target > 0.5
     
     correct_target = (resulting_target == target)
-
     dataset.selectSplittedDataset('left')
-    #print(correct_target.sum().item()/len(target))
+
     return correct_target.sum().item()/len(target)
     
 
