@@ -276,7 +276,7 @@ def init_weights(module):
         module.reset_parameters()
     
 def train_net(model, device, optimizer, criterion, dataloader, 
-               epochs=10, lambda_=1e-3, reg_type=None, save=False):
+               epochs=10, lambda_=1e-3, reg_type=None, save=False, dataset=None):
     
     # Initialize model weights
     model.apply(init_weights)  
@@ -287,6 +287,8 @@ def train_net(model, device, optimizer, criterion, dataloader,
     avg_epoch_loss_test = []
     avg_epoch_accuracy_train = []
     avg_epoch_accuracy_test = []
+    avg_epoch_target_accuracy_train = []
+    avg_epoch_target_accuracy_test = []
     
     for e in range(epochs):
         start = time.time()
@@ -336,9 +338,16 @@ def train_net(model, device, optimizer, criterion, dataloader,
             if phase == 'train':
                 avg_epoch_loss_train.append(loss_accum/(len(dataloader[phase_idx])*len(X)))
                 avg_epoch_accuracy_train.append(correct_train/(len(dataloader[phase_idx])*len(X)))
+                if dataset is not None:
+                    if dataset.split:
+                        avg_epoch_target_accuracy_train.append(evaluate_net_classes(model,dataset))
             else:
                 avg_epoch_loss_test.append(loss_accum/(len(dataloader[phase_idx])*len(X)))
                 avg_epoch_accuracy_test.append(correct_train/(len(dataloader[phase_idx])*len(X)))
+                if dataset is not None:
+                    if dataset.split:
+                        avg_epoch_target_accuracy_test.append(evaluate_net_classes(model,dataset))
+            
         
         end = time.time()-start
         print("Epoch {}: Duration: {:.02f}s, Train Loss: {:.02e}, Train Acc: {:.02f}, Val Loss: {:.02e}, Val Acc: {:.02f}".format(e,end, avg_epoch_loss_train[e],avg_epoch_accuracy_train[e],avg_epoch_loss_test[e],avg_epoch_accuracy_test[e]))
@@ -351,7 +360,9 @@ def train_net(model, device, optimizer, criterion, dataloader,
     return {'train_loss':avg_epoch_loss_train, 
         	'train_accuracy':avg_epoch_accuracy_train, 
         	'test_loss':avg_epoch_loss_test, 
-        	'test_accuracy':avg_epoch_accuracy_test}, model
+        	'test_accuracy':avg_epoch_accuracy_test,
+        	'train_target_accuracy':avg_epoch_target_accuracy_train,
+        	'test_target_accuracy':avg_epoch_target_accuracy_test}, model
             
 def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch_spec,
                epochs=10, lambda_=1e-3, reg_type=None, save=False):
@@ -378,6 +389,12 @@ def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch
         optim = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
         print("Invalid optimizer specifications. Defaulting to SGD with lr=0.01, eta=0.5")
     
+    #Needed if dataset is splitted
+    if dataset.split:
+        data = dataset
+    else:
+        data = None
+    
     for i in range(n_iter):
         
         # Randomize datasets for each trial and make dataloader
@@ -391,10 +408,14 @@ def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch
             dataloader.append(dataset.return_dataloader(**batch_spec))    
         
         # Train
+        print("-"*100)
+        print("Running Trial: {}".format(i))
+        print("-"*100)
         performance, _ = train_net(model, device, optim, criterion, dataloader,
                                     epochs=epochs, lambda_=1e-3, reg_type=None, 
-                                    save=False)
+                                    save=False, dataset=data)
         trial_perfs.append(performance)
+            
     
     perf_as_tensor = {}
     for i,trial in enumerate(trial_perfs):
@@ -404,19 +425,21 @@ def do_train_trials(n_iter, model, device, optim_spec, criterion, dataset, batch
                 perf_as_tensor[key] = [torch.Tensor(val)]
             else:
                 perf_as_tensor[key].append(torch.Tensor(val))
-                
+            
     overall_perf = {}
     for key, val in perf_as_tensor.items():
         total = torch.stack(val, dim=0)
         overall_perf['avg_'+key] = total.mean(dim=0)
         overall_perf['std_'+key] =  total.std(dim=0)
     
+    
     return ModelPerformanceSummary(model, overall_perf)
         
 
 def evaluate_net_classes(model, dataset):
     
-    model.eval()
+    #model.eval()
+    #dataset.test()
     sides = ['left','right']
     resulting_classes = []
     target = dataset[:]['classes']
@@ -436,7 +459,8 @@ def evaluate_net_classes(model, dataset):
     
     correct_target = (resulting_target == target)
 
-    
+    dataset.selectSplittedDataset('left')
+    #print(correct_target.sum().item()/len(target))
     return correct_target.sum().item()/len(target)
     
 
