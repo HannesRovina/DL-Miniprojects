@@ -47,7 +47,7 @@ class LossMSE(Module):
     
     def backward(self, inputs, targets):
         # Gradient of MSE wrt inputs
-        return -2*(inputs-targets)
+        return 2*(inputs-targets)
         
     
 ## returns tanh of input        

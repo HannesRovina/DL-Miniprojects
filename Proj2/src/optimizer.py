@@ -8,7 +8,7 @@ Created on Thu May  9 10:38:56 2019
 class Optimizer(object):
     def __init__(self, parameters, **kwargs):
         super(Optimizer, self).__init__()
-        self.parameters
+        self.parameters = parameters
         
     def zero_grad(self):
         """
@@ -27,12 +27,21 @@ class Optimizer(object):
         for m in self.parameters:
             if isinstance(m, list):
                 for param in m:
-                    d_param = self.update(param.get())
+                    param.update_param(self.update_(param.get()))
             else:
-                self.update(m)
+                m.update_param(self.update_(m.get()))
     
-    def update(self, param):
+    def update_(self, param):
         """
         Define the parameter update
         """
         raise NotImplementedError
+        
+class SGD(Optimizer):
+    def __init__(self, parameters, lr=0.0001):
+        super(SGD, self).__init__(parameters)
+        self.lr = lr
+    def update_(self, param):
+        return -self.lr * param[1]
+    
+    
