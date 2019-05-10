@@ -1,5 +1,7 @@
-import torch
+from torch import empty
 import math
+from .ghetto_autograd import Nodes, Parameter
+from .functional import reLU, d_reLU, tanh, d_tanh
 
 ## BaseClass
 class Module(object):
@@ -27,8 +29,10 @@ class Module(object):
     def backward(self, * gradwrtoutput):
     
         raise NotImplementedError
-        
-    def param(self):
+    
+    # Renamed to parameters. Does not return a list of tuples of tensors, but 
+    # a list of Parameter objects    
+    def parameters(self):
 
         return []
     
@@ -41,48 +45,100 @@ class LossMSE(Module):
                 
         return ((inputs-targets)**2).mean()
     
+    def backward(self, inputs, targets):
+        # Gradient of MSE wrt inputs
+        return -2*(inputs-targets)
+        
+    
 ## returns tanh of input        
 class Tanh(Module):
     def forward(self, input):
-        
-        return torch.tanh(input)
-
-## returns ReLu of input        
+        if not hasattr(self, 'nodes'):
+            self.nodes = Nodes(input)
+        else:
+            self.nodes.set_x(input)
+            
+        return input.apply_(tanh)
+    
+    def backward(self, gradwrtoutput):
+        return gradwrtoutput * self.nodes.get_x().apply_(d_tanh)
+          
 class ReLU(Module):
     def forward(self, input):
+        if not hasattr(self, 'nodes'):
+            self.nodes = Nodes(input)
+        else:
+            self.nodes.set_x(input)
         
-        return torch.relu(input)
-
+        return reLU(input)
+    
+    def backward(self, gradwrtoutput):
+        return gradwrtoutput * d_reLU(self.nodes.get_x())
+        
+        
 class Linear(Module):
 
     def __init__(self, inSize, outSize, bias=True):
         super(Linear, self).__init__()
         self.inSize = inSize
         self.outSize = outSize
-        self.weights = torch.Tensor(inSize, outSize)
+        self.weights = Parameter(empty(inSize, outSize))
         self.hasBias = bias
         
         if bias:
-            self.bias = torch.Tensor(outSize)
+            self.bias = Parameter(empty(1,outSize))
         self.shuffleParameters()
 
     def shuffleParameters(self):
         
         nbInputs = self.inSize
         interval = 1/math.sqrt(nbInputs)
-        self.weights.uniform_(-interval, interval)
+        
+        # Access the weight tensor with data attribute of Parameter class
+        self.weights.data.uniform_(-interval, interval)
         
         if self.hasBias:
-            self.bias.uniform_(-interval, interval)
+            # Access the bias tensor with data attribute of Parameter class
+            self.bias.data.uniform_(-interval, interval)
 
     def forward(self, input):
-        result = input.matmul(self.weights)
+        
+        # Initialize Nodes to store the module input for the backward pass
+        if not hasattr(self, 'nodes'):
+            if self.hasBias:
+                self.nodes = Nodes(input)
+            else:
+                self.nodes = Nodes(input)
+        else:
+            self.nodes.set_x(input)
+            
+        result = input.matmul(self.weights.data)
         if self.hasBias:
-            result += self.bias
-        
+            result += self.bias.data
+            
         return result
+    
+    def backward(self, gradwrtoutput):
+        d_weights = self.nodes.get_x().t().matmul(gradwrtoutput)
+        d_bias = gradwrtoutput
         
-
+        self.weights.accumulate_grad(d_weights)
+        self.bias.accumulate_grad(d_bias)
+        result = gradwrtoutput.matmul(self.weights.data.t())
+        return result
+     
+    def parameters(self):
+        """
+            Method to return parameter objects in order to be modifiable by 
+            another class, eg. an optimizer
+        """
+        if self.hasBias:
+            return [self.weights, self.bias]
+        else:
+            return [self.weights]
+        
+    #def param(self)
+        # Do we really need this?
     
 ## Adds all the modules together
 class Sequential(Module):
@@ -102,3 +158,18 @@ class Sequential(Module):
         for module in self.modulesList:
             prevInput = module(prevInput)
         return prevInput
+    
+    def backward(self, gradwrtoutput):
+        for module in reversed(self.modulesList):
+            gradwrtoutput = module.backward(gradwrtoutput)
+            print("Gradient wrt to input output of module " + module.name +" {0}".format(gradwrtoutput))
+        return gradwrtoutput
+    
+    def parameters(self):
+        parameters = []
+        for module in self.modulesList:
+            # Don't add empty parameter lists
+            if len(module.parameters()) > 0:
+                parameters.append(module.parameters())
+                
+        return parameters
