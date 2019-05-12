@@ -9,6 +9,7 @@ class Module(object):
     def __init__(self):
         self.modulesList = []
         self.name = ''
+        self.mode = 'train'
     #default function call
     def __call__(self, *input, **kwargs):
         
@@ -30,6 +31,14 @@ class Module(object):
     
         raise NotImplementedError
     
+    def train(self):
+        if self.mode != 'train':
+            self.mode = 'train'
+    
+    def test(self):
+        if self.mode != 'test':
+            self.mode = 'test'
+            
     # Renamed to parameters. Does not return a list of tuples of tensors, but 
     # a list of Parameter objects    
     def parameters(self):
@@ -43,7 +52,7 @@ class LossMSE(Module):
     
     def forward(self, inputs, targets):
                 
-        return ((inputs-targets)**2).mean()
+        return ((inputs-targets).pow(2).sum(1)).mean()
     
     def backward(self, inputs, targets):
         # Gradient of MSE wrt inputs
@@ -53,10 +62,11 @@ class LossMSE(Module):
 ## returns tanh of input        
 class Tanh(Module):
     def forward(self, input):
-        if not hasattr(self, 'nodes'):
-            self.nodes = Nodes(input)
-        else:
-            self.nodes.set_x(input)
+        if self.mode == 'train':
+            if not hasattr(self, 'nodes'):
+                self.nodes = Nodes(input)
+            else:
+                self.nodes.set_x(input)
             
         return input.apply_(tanh)
     
@@ -65,10 +75,11 @@ class Tanh(Module):
           
 class ReLU(Module):
     def forward(self, input):
-        if not hasattr(self, 'nodes'):
-            self.nodes = Nodes(input)
-        else:
-            self.nodes.set_x(input)
+        if self.mode == 'train':
+            if not hasattr(self, 'nodes'):
+                self.nodes = Nodes(input)
+            else:
+                self.nodes.set_x(input)
         
         return reLU(input)
     
@@ -104,13 +115,11 @@ class Linear(Module):
     def forward(self, input):
         
         # Initialize Nodes to store the module input for the backward pass
-        if not hasattr(self, 'nodes'):
-            if self.hasBias:
+        if self.mode == 'train':
+            if not hasattr(self, 'nodes'):
                 self.nodes = Nodes(input)
             else:
-                self.nodes = Nodes(input)
-        else:
-            self.nodes.set_x(input)
+                self.nodes.set_x(input)
             
         result = input.matmul(self.weights.data)
         if self.hasBias:
@@ -120,7 +129,7 @@ class Linear(Module):
     
     def backward(self, gradwrtoutput):
         d_weights = self.nodes.get_x().t().matmul(gradwrtoutput)
-        d_bias = gradwrtoutput
+        d_bias = empty(1,gradwrtoutput.shape[0]).fill_(1).matmul(gradwrtoutput)
         
         self.weights.accumulate_grad(d_weights)
         self.bias.accumulate_grad(d_bias)
@@ -162,7 +171,6 @@ class Sequential(Module):
     def backward(self, gradwrtoutput):
         for module in reversed(self.modulesList):
             gradwrtoutput = module.backward(gradwrtoutput)
-            print("Gradient wrt to input output of module " + module.name +" {0}".format(gradwrtoutput))
         return gradwrtoutput
     
     def parameters(self):

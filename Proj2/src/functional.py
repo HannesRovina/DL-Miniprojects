@@ -21,5 +21,24 @@ def tanh(x):
 
 def d_tanh(x):
     return 1-tanh(x)**2
+
+def generate_disc_set(nb, batch_size=None):
+    if batch_size is not None:
+        n_batches = int(nb/batch_size)
+        sample = empty(n_batches, batch_size, 2).uniform_(0,1)
+        dim = 2
+    else:
+        sample = empty(nb, 1, 2).uniform_(0, 1)
+        dim = 2
+    
+    target = sample.pow(2).sum(dim).sub(1 / (2*math.pi)).sign().clamp(min=0).long()
+    labels = empty(2,2).fill_(0)
+    labels[0,1] = 1
+    labels[1,0] = 1
+    
+    # Make the targets 2D (because we have two output)
+    targets = labels[target]
+    
+    return sample, targets
     
     
