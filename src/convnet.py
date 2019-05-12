@@ -304,8 +304,8 @@ def train_net(model, device, optimizer, criterion, dataloader,
         
             for i,batch in enumerate(dataloader[phase_idx]):
                 # Data in minibatch format N x C x H x H
-                X = batch['input']
-                y = batch['target']
+                X = batch['input'].to(device)
+                y = batch['target'].to(device)
 
                 prediction = model(X)  # [N, 2, H, W]
                 _, predictedY = torch.max(prediction.data, 1)
