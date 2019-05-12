@@ -125,7 +125,8 @@ class Linear(Module):
         
         #TODO Hannes: not entirely sure about backprop of bias, I think we have to take the sum and not just d_bias=gradwrtoutput
         if self.hasBias:
-            d_bias = gradwrtoutput.sum(dim=0,keepdim=True)
+            #d_bias = gradwrtoutput.sum(dim=0,keepdim=True)
+            d_bias = gradwrtoutput.t()
 
         self.weights.accumulate_grad(d_weights)
         if self.hasBias:
