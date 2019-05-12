@@ -42,6 +42,7 @@ class SGD(Optimizer):
         super(SGD, self).__init__(parameters)
         self.lr = lr
     def update_(self, param):
+        
         return -self.lr * param[1]
     
     

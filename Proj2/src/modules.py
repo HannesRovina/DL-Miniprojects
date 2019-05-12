@@ -61,6 +61,7 @@ class Tanh(Module):
         return input.apply_(tanh)
     
     def backward(self, gradwrtoutput):
+
         return gradwrtoutput * self.nodes.get_x().apply_(d_tanh)
           
 class ReLU(Module):
@@ -119,11 +120,16 @@ class Linear(Module):
         return result
     
     def backward(self, gradwrtoutput):
-        d_weights = self.nodes.get_x().t().matmul(gradwrtoutput)
-        d_bias = gradwrtoutput
         
+        d_weights = self.nodes.get_x().t().matmul(gradwrtoutput)
+        
+        #TODO Hannes: not entirely sure about backprop of bias, I think we have to take the sum and not just d_bias=gradwrtoutput
+        if self.hasBias:
+            d_bias = gradwrtoutput.sum(dim=0,keepdim=True)
+
         self.weights.accumulate_grad(d_weights)
-        self.bias.accumulate_grad(d_bias)
+        if self.hasBias:
+            self.bias.accumulate_grad(d_bias)
         result = gradwrtoutput.matmul(self.weights.data.t())
         return result
      
@@ -162,7 +168,7 @@ class Sequential(Module):
     def backward(self, gradwrtoutput):
         for module in reversed(self.modulesList):
             gradwrtoutput = module.backward(gradwrtoutput)
-            print("Gradient wrt to input output of module " + module.name +" {0}".format(gradwrtoutput))
+            #print("Gradient wrt to input output of module " + module.name +" {0}".format(gradwrtoutput))
         return gradwrtoutput
     
     def parameters(self):
