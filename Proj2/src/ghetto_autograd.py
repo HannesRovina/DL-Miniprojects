@@ -8,7 +8,7 @@ from torch import empty
 
 class Nodes(object):
     """
-        Class that stores input (x_i) of a module 
+        Class that stores inputs (x_i) of a module.
     """
     
     def __init__(self, x):
@@ -31,6 +31,10 @@ class Parameter(object):
     """
     
     def __init__(self, data):
+        """
+            Inputs:
+            data    torch.Tensor, value of the parameter
+        """
         super(Parameter, self).__init__()
         self.data = data
         # Initialize gradient to zero
@@ -40,6 +44,11 @@ class Parameter(object):
         self.grad.fill_(0)
             
     def update_param(self, update):
+        """
+            Inputs:
+            update  torch.Tensor of the same shape as self.data. Increment of 
+                    parameter value
+        """
         self.data += update
         
     def accumulate_grad(self, add_grad):

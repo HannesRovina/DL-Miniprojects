@@ -30,6 +30,9 @@ class Module(object):
     def backward(self, * gradwrtoutput):
     
         raise NotImplementedError
+        
+    def shuffleParameters(self):
+        pass
     
     def train(self):
         if self.mode != 'train':
@@ -44,20 +47,19 @@ class Module(object):
     def parameters(self):
 
         return []
-    
-
-        
+         
 ## Calculates the mean squared error
-class LossMSE(Module):
-    
+class MSELoss(Module):
+    """
+        Mean-square error loss
+    """
     def forward(self, inputs, targets):
                 
         return ((inputs-targets).pow(2).sum(1)).mean()
     
     def backward(self, inputs, targets):
         # Gradient of MSE wrt inputs
-        return 2*(inputs-targets)
-        
+        return 2*(inputs-targets)        
     
 ## returns tanh of input        
 class Tanh(Module):
@@ -71,7 +73,6 @@ class Tanh(Module):
         return input.apply_(tanh)
     
     def backward(self, gradwrtoutput):
-
         return gradwrtoutput * self.nodes.get_x().apply_(d_tanh)
           
 class ReLU(Module):
@@ -102,16 +103,19 @@ class Linear(Module):
         self.shuffleParameters()
 
     def shuffleParameters(self):
-        
+        """
+            Initialize/Re-initialize the parameters
+        """
         nbInputs = self.inSize
         interval = 1/math.sqrt(nbInputs)
         
         # Access the weight tensor with data attribute of Parameter class
         self.weights.data.uniform_(-interval, interval)
-        
+        self.weights.reset_grad()
         if self.hasBias:
             # Access the bias tensor with data attribute of Parameter class
             self.bias.data.uniform_(-interval, interval)
+            self.bias.reset_grad()
 
     def forward(self, input):
         
@@ -129,7 +133,17 @@ class Linear(Module):
         return result
     
     def backward(self, gradwrtoutput):
-        
+        """
+            Backpropagation
+            weights: dL/dw = dL/ds * ds/dw = x * dL/ds
+            Shapes: x: (batch_size x inSize ) gradwrtoutput: (batch_size x outSize)
+                -> x.t() x gradwrtoutput = (inSize x outSize) which is the shape of 
+                the weights
+            bias: dL/db = dL/ds
+            Shapes: if dl/ds is (batch_size x outSize) then contribution of each sample 
+                    in batch must be added. 
+                    ones (1 x batch_size) X dl/ds (batch_size x outSize)
+        """
         d_weights = self.nodes.get_x().t().matmul(gradwrtoutput)
         
         if self.hasBias:
@@ -178,6 +192,10 @@ class Sequential(Module):
             gradwrtoutput = module.backward(gradwrtoutput)
 
         return gradwrtoutput
+    
+    def shuffleParameters(self):
+        for module in self.modulesList:
+            module.shuffleParameters()
     
     def parameters(self):
         parameters = []
