@@ -13,17 +13,20 @@ class Nodes(object):
     
     def __init__(self, x):
         super(Nodes, self).__init__()
-        self.x = x
+        self._x = x
        
     def get_x(self):
-        return self.x
+        return self._x
     
     def set_x(self, x):
         try:
-            self.x.copy_(x)
+            self._x.copy_(x)
         except RuntimeError:
             print("Tensor shape of x does not match shape")
-            
+    
+    # Define getter, setter
+    x = property(get_x, set_x)
+    
 class Parameter(object):
     """
         Class that stores the value of a parameter and the  gradient wrt to the
@@ -42,6 +45,8 @@ class Parameter(object):
     
     def reset_grad(self):
         self.grad.fill_(0)
+        if hasattr(self, 'tmp'):
+            del self.tmp
             
     def update_param(self, update):
         """
@@ -56,3 +61,17 @@ class Parameter(object):
             
     def get(self):
         return self.data, self.grad
+    
+    def save_tmp(self, value):
+        """
+            Saves an arbitrary tensor associated to this parameter, such as
+            previous values of the gradient needed later on for update computation
+        """
+        self.tmp = value
+    def load_tmp(self):
+        if not hasattr(self, 'tmp'):
+            return None
+        else:
+            return self.tmp
+        
+    temp = property(load_tmp, save_tmp)

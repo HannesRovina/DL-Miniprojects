@@ -68,12 +68,12 @@ class Tanh(Module):
             if not hasattr(self, 'nodes'):
                 self.nodes = Nodes(input)
             else:
-                self.nodes.set_x(input)
+                self.nodes.x = input
             
         return input.apply_(tanh)
     
     def backward(self, gradwrtoutput):
-        return gradwrtoutput * self.nodes.get_x().apply_(d_tanh)
+        return gradwrtoutput * self.nodes.x.apply_(d_tanh)
           
 class ReLU(Module):
     def forward(self, input):
@@ -81,12 +81,12 @@ class ReLU(Module):
             if not hasattr(self, 'nodes'):
                 self.nodes = Nodes(input)
             else:
-                self.nodes.set_x(input)
+                self.nodes.x = input
         
         return reLU(input)
     
     def backward(self, gradwrtoutput):
-        return gradwrtoutput * d_reLU(self.nodes.get_x())
+        return gradwrtoutput * d_reLU(self.nodes.x)
         
         
 class Linear(Module):
@@ -124,7 +124,7 @@ class Linear(Module):
             if not hasattr(self, 'nodes'):
                 self.nodes = Nodes(input)
             else:
-                self.nodes.set_x(input)
+                self.nodes.x = input
             
         result = input.matmul(self.weights.data)
         if self.hasBias:
@@ -144,7 +144,7 @@ class Linear(Module):
                     in batch must be added. 
                     ones (1 x batch_size) X dl/ds (batch_size x outSize)
         """
-        d_weights = self.nodes.get_x().t().matmul(gradwrtoutput)
+        d_weights = self.nodes.x.t().matmul(gradwrtoutput)
         
         if self.hasBias:
             d_bias = empty(1,gradwrtoutput.shape[0]).fill_(1).matmul(gradwrtoutput)

@@ -61,7 +61,6 @@ def train(train_input, train_target, test_input, test_target, model, optim, crit
         acc_train = 0
         loss_test = 0
         acc_test = 0
-        
         for x, y in zip(train_input, train_target):
             model.train()
             pred = model(x)
@@ -88,18 +87,30 @@ def train(train_input, train_target, test_input, test_target, model, optim, crit
     # return the final train and test errors
     return  (loss_train/len(train_input), 100*acc_train/len(train_input)), (loss_test/len(test_input), 100*acc_test/len(test_input))
 
-def tune_lr(lambdas, train_input, train_target, test_input, test_target, model, optimizer, criterion, epochs=20):
+def tune_hyperparam(hyperparam1, hyperparam2, train_input, train_target, test_input, test_target, model, optimizer, criterion, epochs=20):
     max_acc = 0
     best = None
-    print("Adjusting learning rate...")
-    for lambda_ in lambdas:
-        optim = optimizer(model.parameters(), lr=lambda_)
-        tr_stats, te_stats = train(train_input, train_target, test_input, test_target, model, optim, criterion, epochs=20, verbose=False)
-        
-        if te_stats[1] > max_acc:
-            max_acc = te_stats[1]
-            best = lambda_
+    
+    print("Adjusting hyperparameters...")
+    for p1 in hyperparam1:
+        if len(hyperparam2) == 0:
+            optim = optimizer(model.parameters(), lr=p1)
+            tr_stats, te_stats = train(train_input, train_target, test_input, test_target, model, optim, criterion, epochs=20, verbose=False)
             
-    print("Best accuracy after {0} epochs: {1:.02f}, learning rate: {2:.02e}".format(epochs, max_acc, best))
+            if te_stats[1] > max_acc:
+                max_acc = te_stats[1]
+                best = p1
+        else:
+            for p2 in hyperparam2:
+                optim = optimizer(model.parameters(), lr=p1, momentum=p2)
+                tr_stats, te_stats = train(train_input, train_target, test_input, test_target, model, optim, criterion, epochs=20, verbose=False)
+                
+                if te_stats[1] > max_acc:
+                    max_acc = te_stats[1]
+                    best = (p1, p2)
+    if isinstance(best, tuple): 
+        print("Best accuracy after {0} epochs: {1:.02f}, learning rate: {2:.02e} Momentum: {3:.02f}".format(epochs, max_acc, best[0], best[1]))
+    else:         
+        print("Best accuracy after {0} epochs: {1:.02f}, learning rate: {2:.02e}".format(epochs, max_acc, best))
     return best
     

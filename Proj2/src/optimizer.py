@@ -34,10 +34,9 @@ class Optimizer(object):
         for m in self.parameters:
             if isinstance(m, list):
                 for param in m:
-                    param.update_param(self.update_(param.get()))
+                    self.update_(param)
             else:
-                m.update_param(self.update_(m.get()))
-    
+                self.update_(m)
     def update_(self, param):
         """
         Define the parameter update
@@ -56,8 +55,27 @@ class SGD(Optimizer):
         
     def update_(self, param): 
         # Make sure that the shapes are correct
-        return - self.lr * param[1]
+        param.update_param(- self.lr * param.grad)
   
-    
+class NesterovSGD(Optimizer):
+    """
+    Optimizer subclass that implements Nesterov gradient descent 
+    """
+    def __init__(self, parameters, lr=0.0001, momentum=0.5):
+        super(NesterovSGD, self).__init__(parameters)
+        self.lr = lr
+        self.mu = momentum
+        
+    def update_(self, param): 
+        grad = param.grad
+        if param.temp is None:
+            v_prev = empty(grad.shape).fill_(0)
+        else:
+            v_prev = param.temp
+        v = self.mu * v_prev - self.lr * grad
+
+        # Save velocity for next step
+        param.temp = v
+        param.update_param(-self.mu * v_prev + (1 + self.mu) * v)  
 
     
