@@ -50,7 +50,7 @@ def count_module_train_params(module):
     assert hasattr(module, 'parameters')
     return sum(p.numel() for p in module.parameters() if p.requires_grad)
 
-def plot_performance(perfs, plot_perfs, figsize=(18,7), suptitle=None):
+def plot_performance(figNb, perfs, plot_perfs, figsize=(18,7), suptitle=None):
     """
 	Plot the performance of a run
 	Inputs
@@ -65,7 +65,7 @@ def plot_performance(perfs, plot_perfs, figsize=(18,7), suptitle=None):
     styles = ['-','--','-.',':']
 
     assert isinstance(figsize, tuple)
-    fig = plt.figure('History Plot', figsize=figsize)
+    fig = plt.figure('History Plot {}'.format(figNb), figsize=figsize)
     if suptitle is not None:
         fig.suptitle(suptitle, fontsize=16)
     n_plots = len(plot_perfs)
