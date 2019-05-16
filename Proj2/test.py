@@ -17,7 +17,8 @@ train_input, train_target = generate_disc_set(N, batch_size=50)
 
 model = module.Sequential(('fc1',module.Linear(2,25)),('relu1',module.ReLU()),
                           ('fc2',module.Linear(25,25)),('relu2',module.ReLU()),
-                          ('fc3',module.Linear(25,2)),('tanh1',module.Tanh()))
+                          ('fc3',module.Linear(25,25)),('relu3',module.ReLU()),
+                          ('fc4',module.Linear(25,2)),('tanh1',module.Tanh()))
 criterion = module.MSELoss()
 
 # Tuning of the learning rate
