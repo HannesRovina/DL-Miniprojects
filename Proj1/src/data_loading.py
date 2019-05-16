@@ -49,7 +49,7 @@ class DlDataset(Dataset):
         elif self.return_set == 'test':
             #print("Returning test data...")
             inp, target, classes = self.dataset[3:]
-            stats = self.stats_te
+            stats = self.stats_tr
         
         if self.normalize:
             inp.sub_(stats[0].div_(stats[1]))

@@ -141,8 +141,7 @@ for model in models:
     print("-"*100)
     print("Running model: {}".format(model.name()))
     print("-"*100)
-
-    
+	
     performance = do_train_trials(10, model, device, optim_spec, criterion, dataset, batch_spec,
                                     epochs=epochs, lambda_=1e-3, reg_type=None, 
                                     save=False)
