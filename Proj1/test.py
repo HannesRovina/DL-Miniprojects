@@ -28,7 +28,7 @@ gamma = 0.2
 
 criterion = torch.nn.CrossEntropyLoss()
 
-optim_spec = {'type':'SGD', 'lr':eta, 'momentum':gamma}
+
 batch_spec = {'batch_size': 100, 'shuffle':True, 'num_workers':4}
 
 
@@ -141,7 +141,7 @@ for model in models:
     print("-"*100)
     print("Running model: {}".format(model.name()))
     print("-"*100)
-	
+    optim_spec = {'type':'SGD', 'lr':eta, 'momentum':gamma}	
     performance = do_train_trials(10, model, device, optim_spec, criterion, dataset, batch_spec,
                                     epochs=epochs, lambda_=1e-3, reg_type=None, 
                                     save=False)
@@ -198,7 +198,7 @@ for model in models_digit:
     print("-"*100)
     print("Running model: {}".format(model.name()))
     print("-"*100)
-    
+    optim_spec = {'type':'SGD', 'lr':eta, 'momentum':gamma}
     performance = do_train_trials(10, model, device, optim_spec, criterion, dataset_digit, batch_spec,
                                     epochs=epochs, lambda_=1e-3, reg_type=None, 
                                     save=False)
