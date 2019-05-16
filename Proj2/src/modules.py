@@ -106,8 +106,9 @@ class Linear(Module):
         """
             Initialize/Re-initialize the parameters
         """
-        nbInputs = self.inSize
-        interval = 1/math.sqrt(nbInputs)
+        nbInputs, nbOutputs = self.inSize, self.outSize
+        # Xavier initialization
+        interval = math.sqrt(6/(nbInputs + nbOutputs))
         
         # Access the weight tensor with data attribute of Parameter class
         self.weights.data.uniform_(-interval, interval)

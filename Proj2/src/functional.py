@@ -28,7 +28,8 @@ def generate_disc_set(nb, batch_size=1):
     dim = 2
     
     #TODO not sure about centering the circle, maybe remove 0.5 in sub()
-    target = sample.pow(2).sum(dim).sub(0.5+ 1 / (2*math.pi)).sign().clamp(min=0).long()
+    #target = sample.pow(2).sum(dim).sub(0.5+ 1 / (2*math.pi)).sign().clamp(min=0).long()
+    target = sample.sub(0.5).pow(2).sum(dim).sub(1 / (2*math.pi)).sign().clamp(min=0).long()
     labels = empty(2,2).fill_(0)
     labels[0,1] = 1
     labels[1,0] = 1
